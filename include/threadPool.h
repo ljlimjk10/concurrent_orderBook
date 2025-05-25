@@ -36,7 +36,7 @@ public:
 		{
 			for (uint i=0; i<supportedConcurrentThreads; ++i)
 			{
-				threads_.push_back(std::thread{&ThreadPool::runWorkerThread, this});
+				threads_.emplace_back(&ThreadPool::runWorkerThread, this);
 			}
 		}
 		catch (...)

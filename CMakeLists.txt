@@ -33,6 +33,8 @@ add_executable(orderbook main.cpp
         include/threadPool.h
         include/threadPool.h
         include/orderBookManager.h
+        src/orderBookManager.cpp
+        src/orderBookManager.cpp
 )
 
 target_link_libraries(orderbook PRIVATE fmt::fmt PRIVATE Boost::random)

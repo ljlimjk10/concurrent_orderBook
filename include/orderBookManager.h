@@ -4,42 +4,74 @@
 #include <memory>
 #include <unordered_map>
 
+#include "threadPool.h"
+#include "queue.h"
 #include "instrument.h"
 #include "orderBook.h"
 
 class OrderBookManager {
 public:
-	OrderBookManager() = default;
-
-	OrderBook& GetOrderBook(const InstrumentSymbol& symbol)
+	explicit OrderBookManager(ThreadPool& threadPool)
+		: threadPool_{threadPool}
 	{
-		std::lock_guard<std::mutex> lock(mut_);
-		if (orderBooks_.contains(symbol)) return *orderBooks_[symbol];
-		orderBooks_[symbol] = std::make_unique<OrderBook>();
-		return *orderBooks_[symbol];
-	}
+		dispatchThread_ = std::thread{&OrderBookManager::dispatchThread_, this};
+	};
 
-	Trades AddOrder(InstrumentSymbol& symbol, OrderPointer order)
+	~OrderBookManager()
 	{
-		return GetOrderBook(symbol).AddOrder(order);
+		isDone_ = true;
+		if (dispatchThread_.joinable()) dispatchThread_.join();
+	};
+
+	void AddOrder(InstrumentSymbol& symbol, OrderPointer order)
+	{
+		auto execUnit = GetOrCreateInstrumentExecutionUnit(symbol);
+		execUnit->taskQueue_.push([=]() -> void
+			{
+				execUnit->orderBook_->AddOrder(order);
+			}
+		);
 	}
 
 	void ModifyOrder(InstrumentSymbol& symbol, OrderId orderId, Side side, Price price, Quantity quantity)
 	{
-		return GetOrderBook(symbol).ModifyOrder(orderId, side, price, quantity);
+		auto execUnit = GetOrCreateInstrumentExecutionUnit(symbol);
+		execUnit->taskQueue_.push([=]() -> void
+			{
+				execUnit->orderBook_->ModifyOrder(orderId, side, price, quantity);
+			}
+		);
 	}
 
 	void CancelOrder(InstrumentSymbol& symbol, OrderId orderId)
 	{
-		return GetOrderBook(symbol).CancelOrder(orderId);
-	}
-
-	OrderBook::OrderBookLevelInfo GetOrderBookInfo(const InstrumentSymbol& symbol)
-	{
-		return GetOrderBook(symbol).GetOrderBookInfo();
+		auto execUnit = GetOrCreateInstrumentExecutionUnit(symbol);
+		execUnit->taskQueue_.push([=]() -> void
+			{
+				execUnit->orderBook_->CancelOrder(orderId);
+			}
+		);
 	}
 
 private:
-	mutable std::mutex mut_;
-	std::unordered_map<InstrumentSymbol, std::unique_ptr<OrderBook>> orderBooks_;
+	struct InstrumentExecutionUnit
+	{
+		std::unique_ptr<OrderBook> orderBook_;
+		ThreadSafeQueue<std::function<void()>> taskQueue_;
+		std::atomic_bool isRunning_;
+
+		explicit InstrumentExecutionUnit()
+		: isRunning_{false} {};
+	};
+
+	mutable std::mutex managerMut_;
+	ThreadPool& threadPool_;
+	std::atomic_bool isDone_;
+	std::thread dispatchThread_;
+	std::unordered_map<InstrumentSymbol, std::shared_ptr<InstrumentExecutionUnit>> execUnits_;
+
+	std::shared_ptr<InstrumentExecutionUnit> GetOrCreateInstrumentExecutionUnit(const InstrumentSymbol& symbol);
+
+	void DispatchLoop();
+
 };

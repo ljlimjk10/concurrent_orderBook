@@ -1,8 +1,10 @@
-#include "include/orderBook.h"
+#include "include/threadPool.h"
+#include "include/orderBookManager.h"
 
 int main()
 {
-	OrderBook orderBook;
+	ThreadPool threadPool;
+	OrderBookManager orderBookManager{threadPool};
 
 	return 0;
 }
