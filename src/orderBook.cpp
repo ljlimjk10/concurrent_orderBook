@@ -235,7 +235,7 @@ OrderBook::OrderBookLevelInfo OrderBook::GetOrderBookInfo() const
 {
 	PriceLevelInfos bidsPriceInfos, asksPriceInfos;
 	bidsPriceInfos.reserve(orders_.size());
-	 asksPriceInfos.reserve(orders_.size());
+	asksPriceInfos.reserve(orders_.size());
 
 	auto CreatePriceLevelInfo = [](Price price, const OrdersPointers& orders) ->PriceLevelInfo
 	{
